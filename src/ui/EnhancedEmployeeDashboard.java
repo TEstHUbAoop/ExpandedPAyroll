@@ -1,85 +1,88 @@
 package ui;
 
-import dao.EmployeeDAO;
 import dao.AttendanceDAO;
+import dao.PayrollDAO;
 import model.Employee;
 import model.Attendance;
 import model.Payroll;
 import service.PayrollCalculator;
-import service.JasperReportService;
 import ui.PayrollDetailsDialog;
 import ui.LoginForm;
 import ui.LeaveRequestDialog;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableRowSorter;
 import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.ArrayList;
-
 
 /**
- * Enhanced Employee Dashboard with improved usability and bug fixes
- * Addresses mentor feedback: "GUI could use improvements in terms of usability. Found bugs in functionality."
+ * Enhanced Employee Dashboard with improved OOP design and better UI
+ * Addresses mentor feedback about GUI improvements and functionality bugs
  */
 public class EnhancedEmployeeDashboard extends JFrame {
     private Employee currentUser;
     private JTabbedPane tabbedPane;
 
-    // Enhanced UI components with better validation
+    // Modern Color Scheme
+    private static final Color PRIMARY_BLUE = new Color(52, 152, 219);
+    private static final Color SECONDARY_BLUE = new Color(41, 128, 185);
+    private static final Color SUCCESS_GREEN = new Color(46, 204, 113);
+    private static final Color WARNING_ORANGE = new Color(230, 126, 34);
+    private static final Color DANGER_RED = new Color(231, 76, 60);
+    private static final Color LIGHT_GRAY = new Color(236, 240, 241);
+    private static final Color DARK_GRAY = new Color(52, 73, 94);
+
+    // Personal Info Tab Components
     private JLabel nameLabel, positionLabel, statusLabel, salaryLabel;
     private JLabel phoneLabel, addressLabel, sssLabel, philhealthLabel;
+    private JLabel tinLabel, pagibigLabel, birthdayLabel, ageLabel;
+
+    // Attendance Tab Components
     private JTable attendanceTable;
     private DefaultTableModel attendanceTableModel;
-    private TableRowSorter<DefaultTableModel> attendanceTableSorter;
-    private JLabel totalDaysLabel, averageHoursLabel, attendanceRateLabel;
+    private JLabel totalDaysLabel, averageHoursLabel, lateCountLabel;
+    private JButton refreshAttendanceButton;
+
+    // Payroll Tab Components
     private JTable payrollTable;
     private DefaultTableModel payrollTableModel;
     private JComboBox<String> monthComboBox;
     private JComboBox<String> yearComboBox;
-    private JProgressBar loadingProgressBar;
-    private JLabel statusBarLabel;
+    private JButton calculatePayrollButton;
+    private JButton viewPayslipButton;
 
-    // Enhanced search and filter functionality
-    private JTextField attendanceSearchField;
-    private JComboBox<String> attendanceFilterComboBox;
-    private JButton attendanceRefreshButton;
-    private JButton payrollRefreshButton;
+    // Leave Tab Components
+    private JTable leaveTable;
+    private DefaultTableModel leaveTableModel;
+    private JButton submitLeaveButton;
+    private JButton refreshLeaveButton;
 
     // Services
     private AttendanceDAO attendanceDAO;
+    private PayrollDAO payrollDAO;
     private PayrollCalculator payrollCalculator;
-    private JasperReportService jasperReportService;
-
-    // Loading state management
-    private boolean isLoadingData = false;
 
     public EnhancedEmployeeDashboard(Employee user) {
         this.currentUser = user;
 
         try {
-            // Initialize services with error handling
-            initializeServices();
-            
-            // Initialize UI components with enhanced features
-            initializeEnhancedComponents();
-            setupEnhancedLayout();
-            setupEnhancedEventHandlers();
+            // Initialize services
+            this.attendanceDAO = new AttendanceDAO();
+            this.payrollDAO = new PayrollDAO();
+            this.payrollCalculator = new PayrollCalculator();
 
-            // Load initial data with progress indication
-            loadDataWithProgress();
+            // Initialize UI
+            initializeComponents();
+            setupLayout();
+            setupEventHandlers();
+            loadInitialData();
 
-            System.out.println("✅ Enhanced Employee Dashboard initialized successfully for: " + user.getFullName());
+            System.out.println("✅ Enhanced Employee Dashboard initialized for: " + user.getFullName());
 
         } catch (Exception e) {
             System.err.println("❌ Enhanced Employee Dashboard initialization failed: " + e.getMessage());
@@ -87,413 +90,382 @@ public class EnhancedEmployeeDashboard extends JFrame {
             createErrorInterface(e);
         }
 
-        // Enhanced window properties
-        setTitle("MotorPH Payroll System - Employee Portal (Enhanced)");
-        setSize(1200, 900);
+        // Set window properties
+        setTitle("MotorPH Employee Portal - " + user.getFullName());
+        setSize(1200, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setExtendedState(JFrame.MAXIMIZED_BOTH);
-        
-        // Add window icon and enhanced features
-        setupEnhancedWindow();
     }
 
-    private void initializeServices() throws Exception {
-        this.attendanceDAO = new AttendanceDAO();
-        this.payrollCalculator = new PayrollCalculator();
-        this.jasperReportService = new JasperReportService();
-        
-        // Test services to ensure they work
-        attendanceDAO.getAttendanceByEmployeeId(currentUser.getEmployeeId());
-        System.out.println("✅ Services initialized and tested successfully");
+    private void createErrorInterface(Exception error) {
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(LIGHT_GRAY);
+
+        JPanel errorPanel = new JPanel(new BorderLayout());
+        errorPanel.setBackground(Color.WHITE);
+        errorPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
+
+        String errorMessage = "<html><center>" +
+                "<h1 style='color: #e74c3c;'>⚠️ System Error</h1>" +
+                "<p style='font-size: 16px; margin: 20px 0;'>Unable to initialize Employee Dashboard</p>" +
+                "<p><b>Error:</b> " + error.getMessage() + "</p>" +
+                "<p><i>Please contact IT support for assistance.</i></p>" +
+                "</center></html>";
+
+        JLabel messageLabel = new JLabel(errorMessage, JLabel.CENTER);
+        messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+
+        JButton retryButton = createStyledButton("🔄 Retry", SUCCESS_GREEN);
+        JButton logoutButton = createStyledButton("🚪 Logout", SECONDARY_BLUE);
+
+        retryButton.addActionListener(e -> {
+            dispose();
+            SwingUtilities.invokeLater(() -> new EnhancedEmployeeDashboard(currentUser).setVisible(true));
+        });
+
+        logoutButton.addActionListener(e -> {
+            dispose();
+            SwingUtilities.invokeLater(() -> new LoginForm().setVisible(true));
+        });
+
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        buttonPanel.setBackground(Color.WHITE);
+        buttonPanel.add(retryButton);
+        buttonPanel.add(logoutButton);
+
+        errorPanel.add(messageLabel, BorderLayout.CENTER);
+        errorPanel.add(buttonPanel, BorderLayout.SOUTH);
+        add(errorPanel, BorderLayout.CENTER);
     }
 
-    private void initializeEnhancedComponents() {
-        // Enhanced tabbed pane with better styling
-        tabbedPane = new JTabbedPane(JTabbedPane.TOP);
-        tabbedPane.setFont(new Font("Arial", Font.BOLD, 14));
+    private void initializeComponents() {
+        tabbedPane = new JTabbedPane();
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
         tabbedPane.setBackground(Color.WHITE);
 
-        // Enhanced personal info labels with tooltips
-        nameLabel = createEnhancedLabel("Loading...", "Employee's full name");
-        positionLabel = createEnhancedLabel("Loading...", "Current job position");
-        statusLabel = createEnhancedLabel("Loading...", "Employment status (Regular/Probationary)");
-        salaryLabel = createEnhancedLabel("Loading...", "Basic monthly salary");
-        phoneLabel = createEnhancedLabel("Loading...", "Contact phone number");
-        addressLabel = createEnhancedLabel("Loading...", "Home address");
-        sssLabel = createEnhancedLabel("Loading...", "Social Security System number");
-        philhealthLabel = createEnhancedLabel("Loading...", "PhilHealth insurance number");
+        // Personal Info Labels
+        nameLabel = createInfoLabel();
+        positionLabel = createInfoLabel();
+        statusLabel = createInfoLabel();
+        salaryLabel = createInfoLabel();
+        phoneLabel = createInfoLabel();
+        addressLabel = createInfoLabel();
+        sssLabel = createInfoLabel();
+        philhealthLabel = createInfoLabel();
+        tinLabel = createInfoLabel();
+        pagibigLabel = createInfoLabel();
+        birthdayLabel = createInfoLabel();
+        ageLabel = createInfoLabel();
 
-        // Enhanced attendance table with sorting and filtering
+        // Attendance Components
+        initializeAttendanceComponents();
+
+        // Payroll Components
+        initializePayrollComponents();
+
+        // Leave Components
+        initializeLeaveComponents();
+    }
+
+    private JLabel createInfoLabel() {
+        JLabel label = new JLabel();
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        label.setForeground(DARK_GRAY);
+        return label;
+    }
+
+    private void initializeAttendanceComponents() {
         String[] attendanceColumns = {"Date", "Log In", "Log Out", "Work Hours", "Status", "Late (min)", "Undertime (min)"};
         attendanceTableModel = new DefaultTableModel(attendanceColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
-            
-            @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                // Enhanced column type detection for better sorting
-                if (columnIndex == 0) return java.sql.Date.class; // Date
-                if (columnIndex == 3 || columnIndex == 5 || columnIndex == 6) return Double.class; // Numbers
-                return String.class;
-            }
         };
-
         attendanceTable = new JTable(attendanceTableModel);
-        attendanceTableSorter = new TableRowSorter<>(attendanceTableModel);
-        attendanceTable.setRowSorter(attendanceTableSorter);
-        setupEnhancedTableStyling(attendanceTable);
+        setupTableStyling(attendanceTable);
 
-        // Enhanced summary labels
-        totalDaysLabel = createEnhancedLabel("Total Days: 0", "Total attendance days recorded");
-        averageHoursLabel = createEnhancedLabel("Average Hours: 0.00", "Average work hours per day");
-        attendanceRateLabel = createEnhancedLabel("Attendance Rate: 0%", "Percentage of expected work days attended");
+        totalDaysLabel = createMetricLabel("0");
+        averageHoursLabel = createMetricLabel("0.00");
+        lateCountLabel = createMetricLabel("0");
 
-        // Enhanced payroll table
-        String[] payrollColumns = {"Period", "Days Worked", "Gross Pay", "Deductions", "Net Pay", "Actions"};
+        refreshAttendanceButton = createStyledButton("🔄 Refresh", PRIMARY_BLUE);
+    }
+
+    private void initializePayrollComponents() {
+        String[] payrollColumns = {"Period", "Days Worked", "Basic Pay", "Allowances", "Deductions", "Net Pay", "Status"};
         payrollTableModel = new DefaultTableModel(payrollColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 5; // Only Actions column
+                return false;
             }
         };
         payrollTable = new JTable(payrollTableModel);
-        setupEnhancedTableStyling(payrollTable);
+        setupTableStyling(payrollTable);
 
-        // Enhanced month/year selectors with validation
+        // Month/Year selectors
         String[] months = {"January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December"};
         monthComboBox = new JComboBox<>(months);
         monthComboBox.setSelectedIndex(LocalDate.now().getMonthValue() - 1);
-        monthComboBox.setFont(new Font("Arial", Font.PLAIN, 12));
-        monthComboBox.setToolTipText("Select month for payroll calculation");
+        monthComboBox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
-        // Enhanced year selector with more years
-        String[] years = {"2020", "2021", "2022", "2023", "2024", "2025", "2026"};
+        String[] years = {"2023", "2024", "2025"};
         yearComboBox = new JComboBox<>(years);
         yearComboBox.setSelectedItem("2024");
-        yearComboBox.setFont(new Font("Arial", Font.PLAIN, 12));
-        yearComboBox.setToolTipText("Select year for payroll calculation");
+        yearComboBox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
-        // Enhanced search and filter components
-        attendanceSearchField = new JTextField(15);
-        attendanceSearchField.setFont(new Font("Arial", Font.PLAIN, 12));
-        attendanceSearchField.setToolTipText("Search attendance records by date or status");
-        
-        String[] filterOptions = {"All Records", "Present Only", "Late Only", "Undertime Only", "Full Day Only"};
-        attendanceFilterComboBox = new JComboBox<>(filterOptions);
-        attendanceFilterComboBox.setFont(new Font("Arial", Font.PLAIN, 12));
-        attendanceFilterComboBox.setToolTipText("Filter attendance records by type");
-
-        // Enhanced action buttons
-        attendanceRefreshButton = createEnhancedButton("🔄 Refresh", "Reload attendance data", 
-                new Color(108, 117, 125), Color.WHITE);
-        payrollRefreshButton = createEnhancedButton("🔄 Refresh", "Reload payroll data", 
-                new Color(108, 117, 125), Color.WHITE);
-
-        // Progress bar for loading states
-        loadingProgressBar = new JProgressBar();
-        loadingProgressBar.setStringPainted(true);
-        loadingProgressBar.setVisible(false);
-
-        // Enhanced status bar
-        statusBarLabel = new JLabel("Ready");
-        statusBarLabel.setFont(new Font("Arial", Font.PLAIN, 11));
-        statusBarLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        calculatePayrollButton = createStyledButton("💰 Calculate Payroll", SUCCESS_GREEN);
+        viewPayslipButton = createStyledButton("📄 View Payslip", WARNING_ORANGE);
+        viewPayslipButton.setEnabled(false);
     }
 
-    private JLabel createEnhancedLabel(String text, String tooltip) {
+    private void initializeLeaveComponents() {
+        String[] leaveColumns = {"Leave ID", "Type", "Start Date", "End Date", "Days", "Status", "Submitted"};
+        leaveTableModel = new DefaultTableModel(leaveColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        leaveTable = new JTable(leaveTableModel);
+        setupTableStyling(leaveTable);
+
+        submitLeaveButton = createStyledButton("📝 Submit Leave Request", PRIMARY_BLUE);
+        refreshLeaveButton = createStyledButton("🔄 Refresh", SECONDARY_BLUE);
+    }
+
+    private JLabel createMetricLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(new Font("Arial", Font.PLAIN, 14));
-        label.setToolTipText(tooltip);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        label.setForeground(PRIMARY_BLUE);
         return label;
     }
 
-    private JButton createEnhancedButton(String text, String tooltip, Color bgColor, Color fgColor) {
+    private JButton createStyledButton(String text, Color backgroundColor) {
         JButton button = new JButton(text);
-        button.setFont(new Font("Arial", Font.BOLD, 11));
-        button.setBackground(bgColor);
-        button.setForeground(fgColor);
-        button.setToolTipText(tooltip);
-        button.setFocusPainted(false);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        button.setBackground(backgroundColor);
+        button.setForeground(Color.WHITE);
         button.setBorderPainted(false);
-        button.setOpaque(true);
-        
-        // Add hover effect
-        button.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent evt) {
-                button.setBackground(bgColor.brighter());
-            }
-            @Override
-            public void mouseExited(MouseEvent evt) {
-                button.setBackground(bgColor);
-            }
-        });
-        
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(180, 35));
         return button;
     }
 
-    private void setupEnhancedTableStyling(JTable table) {
-        table.setRowHeight(28);
-        table.setFont(new Font("Arial", Font.PLAIN, 12));
-        table.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
-        table.getTableHeader().setBackground(new Color(70, 130, 180));
+    private void setupTableStyling(JTable table) {
+        table.setRowHeight(30);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        table.getTableHeader().setBackground(PRIMARY_BLUE);
         table.getTableHeader().setForeground(Color.WHITE);
-        table.setSelectionBackground(new Color(173, 216, 230));
-        table.setGridColor(new Color(200, 200, 200));
-        table.setShowGrid(true);
-        table.setIntercellSpacing(new Dimension(1, 1));
-        
-        // Enhanced selection model
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        
-        // Add alternating row colors
-        table.setDefaultRenderer(Object.class, new AlternatingRowRenderer());
+        table.setSelectionBackground(new Color(52, 152, 219, 50));
+        table.setSelectionForeground(DARK_GRAY);
+        table.setGridColor(new Color(189, 195, 199));
+        table.setShowVerticalLines(true);
+        table.setShowHorizontalLines(true);
+        table.setBackground(Color.WHITE);
+        table.setForeground(DARK_GRAY);
+
+        // Alternating row colors
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                           boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
+                if (!isSelected) {
+                    if (row % 2 == 0) {
+                        c.setBackground(Color.WHITE);
+                    } else {
+                        c.setBackground(new Color(248, 249, 250));
+                    }
+                }
+                
+                return c;
+            }
+        });
     }
 
-    private void setupEnhancedLayout() {
+    private void setupLayout() {
         setLayout(new BorderLayout());
+        getContentPane().setBackground(LIGHT_GRAY);
 
-        // Enhanced Header Panel with user info
-        JPanel headerPanel = createEnhancedHeaderPanel();
+        // Header Panel
+        JPanel headerPanel = createHeaderPanel();
         add(headerPanel, BorderLayout.NORTH);
 
-        // Enhanced tabs with improved content
-        tabbedPane.addTab("📊 Personal Information", createEnhancedPersonalInfoTab());
-        tabbedPane.addTab("📅 My Attendance", createEnhancedAttendanceTab());
-        tabbedPane.addTab("💰 My Payroll", createEnhancedPayrollTab());
+        // Create tabs
+        tabbedPane.addTab("👤 Personal Info", createPersonalInfoTab());
+        tabbedPane.addTab("📅 My Attendance", createAttendanceTab());
+        tabbedPane.addTab("💰 My Payroll", createPayrollTab());
+        tabbedPane.addTab("🏖️ Leave Requests", createLeaveTab());
 
         add(tabbedPane, BorderLayout.CENTER);
 
-        // Enhanced status bar with progress indicator
-        JPanel statusPanel = createEnhancedStatusPanel();
+        // Status bar
+        JPanel statusPanel = createStatusPanel();
         add(statusPanel, BorderLayout.SOUTH);
     }
 
-    private JPanel createEnhancedHeaderPanel() {
+    private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(25, 25, 112));
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
+        headerPanel.setBackground(DARK_GRAY);
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
 
-        // Left side - title and user info
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        leftPanel.setBackground(new Color(25, 25, 112));
-        
-        JLabel titleLabel = new JLabel("🏍️ MotorPH Payroll System - Employee Portal");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        // Title and welcome
+        JPanel titlePanel = new JPanel(new BorderLayout());
+        titlePanel.setBackground(DARK_GRAY);
+
+        JLabel titleLabel = new JLabel("MotorPH Employee Portal");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(Color.WHITE);
-        
-        JLabel userInfoLabel = new JLabel("Welcome, " + currentUser.getFullName() + " (ID: " + currentUser.getEmployeeId() + ")");
-        userInfoLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        userInfoLabel.setForeground(Color.LIGHT_GRAY);
-        
-        leftPanel.add(titleLabel);
-        leftPanel.add(Box.createHorizontalStrut(20));
-        leftPanel.add(userInfoLabel);
 
-        // Right side - action buttons
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        rightPanel.setBackground(new Color(25, 25, 112));
+        JLabel welcomeLabel = new JLabel("Welcome, " + currentUser.getFirstName() + "!");
+        welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        welcomeLabel.setForeground(LIGHT_GRAY);
 
-        JButton profileButton = createHeaderButton("👤 Profile", "View/Edit Profile");
-        JButton settingsButton = createHeaderButton("⚙️ Settings", "Application Settings");
-        JButton logoutButton = createHeaderButton("🚪 Logout", "Logout from System");
-        
-        profileButton.addActionListener(e -> showUserProfile());
-        settingsButton.addActionListener(e -> showSettings());
+        titlePanel.add(titleLabel, BorderLayout.NORTH);
+        titlePanel.add(welcomeLabel, BorderLayout.SOUTH);
+
+        // Action buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(DARK_GRAY);
+
+        JButton profileButton = createStyledButton("👤 Profile", PRIMARY_BLUE);
+        JButton logoutButton = createStyledButton("🚪 Logout", DANGER_RED);
+
+        profileButton.addActionListener(e -> showProfileDialog());
         logoutButton.addActionListener(e -> logout());
 
-        rightPanel.add(profileButton);
-        rightPanel.add(settingsButton);
-        rightPanel.add(logoutButton);
+        buttonPanel.add(profileButton);
+        buttonPanel.add(logoutButton);
 
-        headerPanel.add(leftPanel, BorderLayout.WEST);
-        headerPanel.add(rightPanel, BorderLayout.EAST);
+        headerPanel.add(titlePanel, BorderLayout.WEST);
+        headerPanel.add(buttonPanel, BorderLayout.EAST);
 
         return headerPanel;
     }
 
-    private JButton createHeaderButton(String text, String tooltip) {
-        JButton button = new JButton(text);
-        button.setBackground(Color.WHITE);
-        button.setForeground(new Color(25, 25, 112));
-        button.setFont(new Font("Arial", Font.BOLD, 11));
-        button.setToolTipText(tooltip);
-        button.setFocusPainted(false);
-        button.setBorderPainted(false);
-        button.setOpaque(true);
-        button.setPreferredSize(new Dimension(100, 30));
-        
-        // Enhanced hover effect
-        button.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent evt) {
-                button.setBackground(new Color(230, 230, 230));
-            }
-            @Override
-            public void mouseExited(MouseEvent evt) {
-                button.setBackground(Color.WHITE);
-            }
-        });
-        
-        return button;
-    }
-
-    private JPanel createEnhancedPersonalInfoTab() {
+    private JPanel createPersonalInfoTab() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBackground(LIGHT_GRAY);
+        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
 
-        // Create scrollable main info panel
+        // Main info panel
         JPanel infoPanel = new JPanel(new GridBagLayout());
         infoPanel.setBackground(Color.WHITE);
-        GridBagConstraints gbc = new GridBagConstraints();
+        infoPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(30, 30, 30, 30)));
 
-        // Enhanced title with icon
-        JLabel titleLabel = new JLabel("👤 Personal Information");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 24));
-        titleLabel.setForeground(new Color(25, 25, 112));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // Title
+        JLabel titleLabel = new JLabel("Personal Information");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        titleLabel.setForeground(DARK_GRAY);
         gbc.gridx = 0; gbc.gridy = 0;
-        gbc.gridwidth = 2;
+        gbc.gridwidth = 4;
         gbc.insets = new Insets(0, 0, 30, 0);
-        gbc.anchor = GridBagConstraints.CENTER;
         infoPanel.add(titleLabel, gbc);
 
         // Reset grid settings
         gbc.gridwidth = 1;
-        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(8, 10, 8, 10);
 
-        // Enhanced field addition with better spacing
-        addEnhancedInfoField(infoPanel, gbc, "👤 Full Name:", nameLabel, 1);
-        addEnhancedInfoField(infoPanel, gbc, "💼 Position:", positionLabel, 2);
-        addEnhancedInfoField(infoPanel, gbc, "📋 Status:", statusLabel, 3);
-        addEnhancedInfoField(infoPanel, gbc, "💰 Basic Salary:", salaryLabel, 4);
-        addEnhancedInfoField(infoPanel, gbc, "📱 Phone:", phoneLabel, 5);
-        addEnhancedInfoField(infoPanel, gbc, "🏠 Address:", addressLabel, 6);
-        addEnhancedInfoField(infoPanel, gbc, "🆔 SSS Number:", sssLabel, 7);
-        addEnhancedInfoField(infoPanel, gbc, "🏥 PhilHealth:", philhealthLabel, 8);
+        // Add info fields in two columns
+        addInfoField(infoPanel, gbc, "Full Name:", nameLabel, 0, 1);
+        addInfoField(infoPanel, gbc, "Employee ID:", new JLabel(String.valueOf(currentUser.getEmployeeId())), 2, 1);
+        addInfoField(infoPanel, gbc, "Position:", positionLabel, 0, 2);
+        addInfoField(infoPanel, gbc, "Status:", statusLabel, 2, 2);
+        addInfoField(infoPanel, gbc, "Basic Salary:", salaryLabel, 0, 3);
+        addInfoField(infoPanel, gbc, "Birthday:", birthdayLabel, 2, 3);
+        addInfoField(infoPanel, gbc, "Age:", ageLabel, 0, 4);
+        addInfoField(infoPanel, gbc, "Phone:", phoneLabel, 2, 4);
+        addInfoField(infoPanel, gbc, "Address:", addressLabel, 0, 5);
+        addInfoField(infoPanel, gbc, "SSS Number:", sssLabel, 2, 5);
+        addInfoField(infoPanel, gbc, "PhilHealth:", philhealthLabel, 0, 6);
+        addInfoField(infoPanel, gbc, "TIN Number:", tinLabel, 2, 6);
+        addInfoField(infoPanel, gbc, "Pag-IBIG:", pagibigLabel, 0, 7);
 
-        // Wrap in scroll pane
-        JScrollPane scrollPane = new JScrollPane(infoPanel);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setBorder(null);
+        // Allowances panel
+        JPanel allowancesPanel = createAllowancesPanel();
 
-        // Enhanced allowances panel
-        JPanel allowancesPanel = createEnhancedAllowancesPanel();
-
-        // Enhanced action panel
-        JPanel actionPanel = createEnhancedActionPanel();
-
-        panel.add(scrollPane, BorderLayout.NORTH);
+        panel.add(infoPanel, BorderLayout.NORTH);
         panel.add(allowancesPanel, BorderLayout.CENTER);
-        panel.add(actionPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
-    private void addEnhancedInfoField(JPanel parent, GridBagConstraints gbc, String labelText, JLabel valueLabel, int row) {
-        gbc.gridx = 0; gbc.gridy = row;
-        gbc.insets = new Insets(10, 0, 10, 20);
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.weightx = 0;
-        
+    private void addInfoField(JPanel parent, GridBagConstraints gbc, String labelText, JLabel valueLabel, int col, int row) {
+        gbc.gridx = col; gbc.gridy = row;
         JLabel label = new JLabel(labelText);
-        label.setFont(new Font("Arial", Font.BOLD, 14));
-        label.setPreferredSize(new Dimension(150, 25));
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setForeground(DARK_GRAY);
         parent.add(label, gbc);
 
-        gbc.gridx = 1;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        valueLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        valueLabel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-            BorderFactory.createEmptyBorder(8, 12, 8, 12)
-        ));
-        valueLabel.setOpaque(true);
-        valueLabel.setBackground(new Color(248, 248, 255));
+        gbc.gridx = col + 1;
+        valueLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        valueLabel.setForeground(DARK_GRAY);
         parent.add(valueLabel, gbc);
     }
 
-    private JPanel createEnhancedAllowancesPanel() {
+    private JPanel createAllowancesPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        TitledBorder border = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(70, 130, 180), 2), 
-                "💼 Monthly Allowances & Benefits",
-                TitledBorder.LEFT, TitledBorder.TOP, 
-                new Font("Arial", Font.BOLD, 16), 
-                new Color(70, 130, 180));
-        panel.setBorder(border);
-        panel.setBackground(Color.WHITE);
+        panel.setBackground(LIGHT_GRAY);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
 
-        JPanel allowanceGrid = new JPanel(new GridLayout(2, 2, 20, 15));
-        allowanceGrid.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        allowanceGrid.setBackground(Color.WHITE);
+        JPanel allowanceGrid = new JPanel(new GridLayout(2, 2, 15, 15));
+        allowanceGrid.setBackground(LIGHT_GRAY);
 
-        // Enhanced allowance cards with animations
-        JPanel ricePanel = createEnhancedAllowanceCard("🍚 Rice Subsidy",
+        // Create allowance cards
+        JPanel riceCard = createAllowanceCard("🍚 Rice Subsidy",
                 String.format("₱%.2f", currentUser.getRiceSubsidy()),
-                new Color(144, 238, 144), "Monthly rice allowance");
+                SUCCESS_GREEN);
 
-        JPanel phonePanel = createEnhancedAllowanceCard("📱 Phone Allowance",
+        JPanel phoneCard = createAllowanceCard("📱 Phone Allowance",
                 String.format("₱%.2f", currentUser.getPhoneAllowance()),
-                new Color(173, 216, 230), "Monthly communication allowance");
+                PRIMARY_BLUE);
 
-        JPanel clothingPanel = createEnhancedAllowanceCard("👔 Clothing Allowance",
+        JPanel clothingCard = createAllowanceCard("👔 Clothing Allowance",
                 String.format("₱%.2f", currentUser.getClothingAllowance()),
-                new Color(255, 182, 193), "Monthly clothing allowance");
+                WARNING_ORANGE);
 
-        // Calculate total with better formatting
         double totalAllowances = currentUser.getRiceSubsidy() +
                 currentUser.getPhoneAllowance() +
                 currentUser.getClothingAllowance();
-        JPanel totalPanel = createEnhancedAllowanceCard("💰 Total Allowances",
+        JPanel totalCard = createAllowanceCard("💰 Total Allowances",
                 String.format("₱%.2f", totalAllowances),
-                new Color(255, 215, 0), "Sum of all monthly allowances");
+                SECONDARY_BLUE);
 
-        allowanceGrid.add(ricePanel);
-        allowanceGrid.add(phonePanel);
-        allowanceGrid.add(clothingPanel);
-        allowanceGrid.add(totalPanel);
+        allowanceGrid.add(riceCard);
+        allowanceGrid.add(phoneCard);
+        allowanceGrid.add(clothingCard);
+        allowanceGrid.add(totalCard);
 
         panel.add(allowanceGrid, BorderLayout.CENTER);
+
         return panel;
     }
 
-    private JPanel createEnhancedAllowanceCard(String title, String amount, Color bgColor, String tooltip) {
+    private JPanel createAllowanceCard(String title, String amount, Color bgColor) {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(bgColor);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY, 1),
-                BorderFactory.createEmptyBorder(15, 15, 15, 15)));
-        card.setToolTipText(tooltip);
+        card.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        card.setPreferredSize(new Dimension(200, 100));
 
         JLabel titleLabel = new JLabel(title, JLabel.CENTER);
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        titleLabel.setForeground(Color.WHITE);
 
         JLabel amountLabel = new JLabel(amount, JLabel.CENTER);
-        amountLabel.setFont(new Font("Arial", Font.BOLD, 20));
-
-        // Add subtle animation on hover
-        card.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent evt) {
-                card.setBackground(bgColor.brighter());
-                card.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(bgColor.darker(), 2),
-                    BorderFactory.createEmptyBorder(14, 14, 14, 14)));
-            }
-            @Override
-            public void mouseExited(MouseEvent evt) {
-                card.setBackground(bgColor);
-                card.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(Color.GRAY, 1),
-                    BorderFactory.createEmptyBorder(15, 15, 15, 15)));
-            }
-        });
+        amountLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        amountLabel.setForeground(Color.WHITE);
 
         card.add(titleLabel, BorderLayout.NORTH);
         card.add(amountLabel, BorderLayout.CENTER);
@@ -501,793 +473,432 @@ public class EnhancedEmployeeDashboard extends JFrame {
         return card;
     }
 
-    private JPanel createEnhancedActionPanel() {
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 15));
-        TitledBorder border = BorderFactory.createTitledBorder("🚀 Quick Actions");
-        border.setTitleFont(new Font("Arial", Font.BOLD, 14));
-        actionPanel.setBorder(border);
-        actionPanel.setBackground(Color.WHITE);
-
-        JButton leaveRequestButton = createEnhancedButton("📝 Submit Leave Request", 
-                "Submit a new leave request", new Color(70, 130, 180), Color.WHITE);
-        leaveRequestButton.setPreferredSize(new Dimension(200, 40));
-
-        JButton viewPayslipButton = createEnhancedButton("💰 View Latest Payslip", 
-                "View your latest payslip", new Color(34, 139, 34), Color.WHITE);
-        viewPayslipButton.setPreferredSize(new Dimension(200, 40));
-
-        JButton updateProfileButton = createEnhancedButton("👤 Update Profile", 
-                "Update your personal information", new Color(255, 140, 0), Color.WHITE);
-        updateProfileButton.setPreferredSize(new Dimension(200, 40));
-
-        // Enhanced event handlers
-        leaveRequestButton.addActionListener(e -> showLeaveRequestDialog());
-        viewPayslipButton.addActionListener(e -> showLatestPayslip());
-        updateProfileButton.addActionListener(e -> showUserProfile());
-
-        actionPanel.add(leaveRequestButton);
-        actionPanel.add(viewPayslipButton);
-        actionPanel.add(updateProfileButton);
-
-        return actionPanel;
-    }
-
-    private JPanel createEnhancedAttendanceTab() {
+    private JPanel createAttendanceTab() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(LIGHT_GRAY);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // Enhanced top panel with search and filter
-        JPanel topPanel = createEnhancedAttendanceControlPanel();
+        // Summary panel
+        JPanel summaryPanel = createAttendanceSummaryPanel();
 
-        // Enhanced summary panel
-        JPanel summaryPanel = createEnhancedAttendanceSummaryPanel();
-
-        // Table panel with better styling
+        // Table panel
         JPanel tablePanel = new JPanel(new BorderLayout());
-        TitledBorder tableBorder = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(70, 130, 180), 2),
-                "📅 Attendance Records", TitledBorder.LEFT, TitledBorder.TOP,
-                new Font("Arial", Font.BOLD, 14), new Color(70, 130, 180));
-        tablePanel.setBorder(tableBorder);
+        tablePanel.setBackground(Color.WHITE);
+        tablePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)));
 
-        JScrollPane attendanceScrollPane = new JScrollPane(attendanceTable);
-        attendanceScrollPane.setPreferredSize(new Dimension(0, 400));
-        tablePanel.add(attendanceScrollPane, BorderLayout.CENTER);
+        JLabel tableTitle = new JLabel("📅 Recent Attendance Records");
+        tableTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        tableTitle.setForeground(DARK_GRAY);
+        tableTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
 
-        // Combine panels
-        JPanel northPanel = new JPanel(new BorderLayout());
-        northPanel.add(topPanel, BorderLayout.NORTH);
-        northPanel.add(summaryPanel, BorderLayout.SOUTH);
+        JScrollPane scrollPane = new JScrollPane(attendanceTable);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
 
-        panel.add(northPanel, BorderLayout.NORTH);
+        tablePanel.add(tableTitle, BorderLayout.NORTH);
+        tablePanel.add(scrollPane, BorderLayout.CENTER);
+
+        panel.add(summaryPanel, BorderLayout.NORTH);
         panel.add(tablePanel, BorderLayout.CENTER);
 
         return panel;
     }
 
-    private JPanel createEnhancedAttendanceControlPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    private JPanel createAttendanceSummaryPanel() {
+        JPanel summaryPanel = new JPanel(new GridLayout(1, 3, 15, 0));
+        summaryPanel.setBackground(LIGHT_GRAY);
+        summaryPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
 
-        // Left side - search and filter
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        leftPanel.add(new JLabel("🔍 Search:"));
-        leftPanel.add(attendanceSearchField);
-        leftPanel.add(Box.createHorizontalStrut(10));
-        leftPanel.add(new JLabel("🔽 Filter:"));
-        leftPanel.add(attendanceFilterComboBox);
+        // Total days card
+        JPanel totalDaysCard = createMetricCard("📊 Total Days", totalDaysLabel, PRIMARY_BLUE);
 
-        // Right side - action buttons
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        rightPanel.add(attendanceRefreshButton);
+        // Average hours card
+        JPanel avgHoursCard = createMetricCard("⏰ Avg Hours/Day", averageHoursLabel, SUCCESS_GREEN);
 
-        panel.add(leftPanel, BorderLayout.WEST);
-        panel.add(rightPanel, BorderLayout.EAST);
-
-        return panel;
-    }
-
-    private JPanel createEnhancedAttendanceSummaryPanel() {
-        JPanel summaryPanel = new JPanel(new GridLayout(1, 3, 20, 0));
-        TitledBorder border = BorderFactory.createTitledBorder("📊 Attendance Summary");
-        border.setTitleFont(new Font("Arial", Font.BOLD, 12));
-        summaryPanel.setBorder(border);
-        summaryPanel.setBackground(new Color(248, 248, 255));
-
-        // Create summary cards
-        JPanel totalDaysCard = createSummaryCard("📅", totalDaysLabel, new Color(173, 216, 230));
-        JPanel avgHoursCard = createSummaryCard("⏰", averageHoursLabel, new Color(144, 238, 144));
-        JPanel attendanceRateCard = createSummaryCard("📈", attendanceRateLabel, new Color(255, 182, 193));
+        // Late count card
+        JPanel lateCard = createMetricCard("⚠️ Late Count", lateCountLabel, WARNING_ORANGE);
 
         summaryPanel.add(totalDaysCard);
         summaryPanel.add(avgHoursCard);
-        summaryPanel.add(attendanceRateCard);
+        summaryPanel.add(lateCard);
 
         return summaryPanel;
     }
 
-    private JPanel createSummaryCard(String icon, JLabel dataLabel, Color bgColor) {
+    private JPanel createMetricCard(String title, JLabel valueLabel, Color bgColor) {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(bgColor);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY, 1),
-                BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+        card.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        card.setPreferredSize(new Dimension(0, 100));
 
-        JLabel iconLabel = new JLabel(icon, JLabel.CENTER);
-        iconLabel.setFont(new Font("Arial", Font.BOLD, 20));
+        JLabel titleLabel = new JLabel(title, JLabel.CENTER);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        titleLabel.setForeground(Color.WHITE);
 
-        dataLabel.setHorizontalAlignment(JLabel.CENTER);
-        dataLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        valueLabel.setHorizontalAlignment(JLabel.CENTER);
+        valueLabel.setForeground(Color.WHITE);
 
-        card.add(iconLabel, BorderLayout.NORTH);
-        card.add(dataLabel, BorderLayout.CENTER);
+        card.add(titleLabel, BorderLayout.NORTH);
+        card.add(valueLabel, BorderLayout.CENTER);
 
         return card;
     }
 
-    private JPanel createEnhancedPayrollTab() {
+    private JPanel createPayrollTab() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(LIGHT_GRAY);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // Enhanced top panel with period selection
-        JPanel topPanel = createEnhancedPayrollControlPanel();
+        // Control panel
+        JPanel controlPanel = createPayrollControlPanel();
 
         // Table panel
         JPanel tablePanel = new JPanel(new BorderLayout());
-        TitledBorder tableBorder = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(34, 139, 34), 2),
-                "💰 Payroll Information", TitledBorder.LEFT, TitledBorder.TOP,
-                new Font("Arial", Font.BOLD, 14), new Color(34, 139, 34));
-        tablePanel.setBorder(tableBorder);
+        tablePanel.setBackground(Color.WHITE);
+        tablePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)));
 
-        JScrollPane payrollScrollPane = new JScrollPane(payrollTable);
-        tablePanel.add(payrollScrollPane, BorderLayout.CENTER);
+        JLabel tableTitle = new JLabel("💰 Payroll History");
+        tableTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        tableTitle.setForeground(DARK_GRAY);
+        tableTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
 
-        panel.add(topPanel, BorderLayout.NORTH);
+        JScrollPane scrollPane = new JScrollPane(payrollTable);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+
+        tablePanel.add(tableTitle, BorderLayout.NORTH);
+        tablePanel.add(scrollPane, BorderLayout.CENTER);
+
+        panel.add(controlPanel, BorderLayout.NORTH);
         panel.add(tablePanel, BorderLayout.CENTER);
 
         return panel;
     }
 
-    private JPanel createEnhancedPayrollControlPanel() {
+    private JPanel createPayrollControlPanel() {
+        JPanel controlPanel = new JPanel(new BorderLayout());
+        controlPanel.setBackground(Color.WHITE);
+        controlPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(20, 20, 20, 20)));
+
+        // Period selection
+        JPanel periodPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        periodPanel.setBackground(Color.WHITE);
+
+        JLabel periodLabel = new JLabel("Select Period:");
+        periodLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        periodLabel.setForeground(DARK_GRAY);
+
+        periodPanel.add(periodLabel);
+        periodPanel.add(monthComboBox);
+        periodPanel.add(yearComboBox);
+
+        // Action buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(Color.WHITE);
+        buttonPanel.add(calculatePayrollButton);
+        buttonPanel.add(viewPayslipButton);
+
+        controlPanel.add(periodPanel, BorderLayout.WEST);
+        controlPanel.add(buttonPanel, BorderLayout.EAST);
+
+        return controlPanel;
+    }
+
+    private JPanel createLeaveTab() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(LIGHT_GRAY);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // Left side - period selection
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        leftPanel.add(new JLabel("📅 Select Period:"));
-        leftPanel.add(monthComboBox);
-        leftPanel.add(yearComboBox);
-        
-        JButton calculateButton = createEnhancedButton("💰 Calculate Payroll", 
-                "Calculate payroll for selected period", new Color(34, 139, 34), Color.WHITE);
-        calculateButton.addActionListener(e -> calculatePayrollForPeriod());
-        leftPanel.add(calculateButton);
+        // Control panel
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        controlPanel.setBackground(Color.WHITE);
+        controlPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)));
 
-        // Right side - action buttons
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        
-        JButton exportButton = createEnhancedButton("📄 Export PDF", 
-                "Export payroll summary to PDF", new Color(220, 53, 69), Color.WHITE);
-        exportButton.addActionListener(e -> exportPayrollToPDF());
-        
-        rightPanel.add(payrollRefreshButton);
-        rightPanel.add(exportButton);
+        controlPanel.add(submitLeaveButton);
+        controlPanel.add(refreshLeaveButton);
 
-        panel.add(leftPanel, BorderLayout.WEST);
-        panel.add(rightPanel, BorderLayout.EAST);
+        // Table panel
+        JPanel tablePanel = new JPanel(new BorderLayout());
+        tablePanel.setBackground(Color.WHITE);
+        tablePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(189, 195, 199)),
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)));
+
+        JLabel tableTitle = new JLabel("🏖️ My Leave Requests");
+        tableTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        tableTitle.setForeground(DARK_GRAY);
+        tableTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
+
+        JScrollPane scrollPane = new JScrollPane(leaveTable);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+
+        tablePanel.add(tableTitle, BorderLayout.NORTH);
+        tablePanel.add(scrollPane, BorderLayout.CENTER);
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBackground(LIGHT_GRAY);
+        mainPanel.add(controlPanel, BorderLayout.NORTH);
+        mainPanel.add(Box.createVerticalStrut(15), BorderLayout.CENTER);
+        mainPanel.add(tablePanel, BorderLayout.SOUTH);
+
+        panel.add(mainPanel, BorderLayout.CENTER);
 
         return panel;
     }
 
-    private JPanel createEnhancedStatusPanel() {
+    private JPanel createStatusPanel() {
         JPanel statusPanel = new JPanel(new BorderLayout());
         statusPanel.setBorder(BorderFactory.createLoweredBevelBorder());
-        statusPanel.setBackground(new Color(245, 245, 245));
+        statusPanel.setBackground(Color.WHITE);
 
-        // Left side - status message
-        JPanel leftStatusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        leftStatusPanel.setBackground(new Color(245, 245, 245));
-        leftStatusPanel.add(statusBarLabel);
+        JLabel statusLabel = new JLabel("Ready | Employee ID: " + currentUser.getEmployeeId() + 
+                " | Position: " + currentUser.getPosition());
+        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        statusLabel.setForeground(DARK_GRAY);
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        // Center - progress bar
-        JPanel centerStatusPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        centerStatusPanel.setBackground(new Color(245, 245, 245));
-        centerStatusPanel.add(loadingProgressBar);
+        JLabel timeLabel = new JLabel(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy")));
+        timeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        timeLabel.setForeground(DARK_GRAY);
+        timeLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        // Right side - current date/time
-        JPanel rightStatusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        rightStatusPanel.setBackground(new Color(245, 245, 245));
-        
-        JLabel dateTimeLabel = new JLabel(LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")));
-        dateTimeLabel.setFont(new Font("Arial", Font.PLAIN, 11));
-        dateTimeLabel.setForeground(new Color(100, 100, 100));
-        rightStatusPanel.add(dateTimeLabel);
-
-        statusPanel.add(leftStatusPanel, BorderLayout.WEST);
-        statusPanel.add(centerStatusPanel, BorderLayout.CENTER);
-        statusPanel.add(rightStatusPanel, BorderLayout.EAST);
+        statusPanel.add(statusLabel, BorderLayout.WEST);
+        statusPanel.add(timeLabel, BorderLayout.EAST);
 
         return statusPanel;
     }
 
-    private void setupEnhancedEventHandlers() {
-        // Enhanced attendance search functionality
-        attendanceSearchField.addKeyListener(new java.awt.event.KeyAdapter() {
-            @Override
-            public void keyReleased(java.awt.event.KeyEvent evt) {
-                filterAttendanceRecords();
-            }
-        });
+    private void setupEventHandlers() {
+        // Attendance events
+        refreshAttendanceButton.addActionListener(e -> loadAttendanceData());
 
-        // Enhanced attendance filter functionality
-        attendanceFilterComboBox.addActionListener(e -> filterAttendanceRecords());
+        // Payroll events
+        monthComboBox.addActionListener(e -> loadPayrollData());
+        yearComboBox.addActionListener(e -> loadPayrollData());
+        calculatePayrollButton.addActionListener(e -> calculateCurrentPayroll());
+        viewPayslipButton.addActionListener(e -> viewSelectedPayslip());
 
-        // Enhanced refresh button handlers
-        attendanceRefreshButton.addActionListener(e -> refreshAttendanceData());
-        payrollRefreshButton.addActionListener(e -> refreshPayrollData());
+        // Leave events
+        submitLeaveButton.addActionListener(e -> showLeaveRequestDialog());
+        refreshLeaveButton.addActionListener(e -> loadLeaveData());
 
-        // Enhanced payroll table double-click handler
-        payrollTable.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
-                    int selectedRow = payrollTable.getSelectedRow();
-                    if (selectedRow != -1) {
-                        showPayrollDetails(selectedRow);
-                    }
-                }
-            }
-        });
-
-        // Enhanced tab change handler
-        tabbedPane.addChangeListener(e -> {
-            int selectedIndex = tabbedPane.getSelectedIndex();
-            switch (selectedIndex) {
-                case 0: // Personal Info
-                    updateStatusBar("Personal information displayed");
-                    break;
-                case 1: // Attendance
-                    updateStatusBar("Attendance records loaded");
-                    refreshAttendanceData();
-                    break;
-                case 2: // Payroll
-                    updateStatusBar("Payroll information displayed");
-                    refreshPayrollData();
-                    break;
-            }
-        });
-
-        // Enhanced keyboard shortcuts
-        setupKeyboardShortcuts();
-    }
-
-    private void setupKeyboardShortcuts() {
-        // F5 - Refresh current tab
-        KeyStroke f5 = KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0);
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(f5, "refresh");
-        getRootPane().getActionMap().put("refresh", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                refreshCurrentTab();
-            }
-        });
-
-        // Ctrl+P - Print/Export
-        KeyStroke ctrlP = KeyStroke.getKeyStroke(KeyEvent.VK_P, ActionEvent.CTRL_MASK);
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ctrlP, "print");
-        getRootPane().getActionMap().put("print", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                exportCurrentTab();
-            }
-        });
-
-        // Ctrl+Q - Logout
-        KeyStroke ctrlQ = KeyStroke.getKeyStroke(KeyEvent.VK_Q, ActionEvent.CTRL_MASK);
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ctrlQ, "logout");
-        getRootPane().getActionMap().put("logout", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                logout();
+        // Table selection events
+        payrollTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                viewPayslipButton.setEnabled(payrollTable.getSelectedRow() != -1);
             }
         });
     }
 
-    private void loadDataWithProgress() {
-        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                isLoadingData = true;
-                
-                // Show progress bar
-                SwingUtilities.invokeLater(() -> {
-                    loadingProgressBar.setVisible(true);
-                    loadingProgressBar.setString("Loading employee data...");
-                });
-
-                publish("Loading personal information...");
-                Thread.sleep(500); // Simulate loading time
-                loadPersonalInformation();
-
-                publish("Loading attendance records...");
-                Thread.sleep(500);
-                loadAttendanceData();
-
-                publish("Loading payroll information...");
-                Thread.sleep(500);
-                loadPayrollData();
-
-                publish("Finalizing...");
-                Thread.sleep(300);
-
-                return null;
-            }
-
-            @Override
-            protected void process(List<String> chunks) {
-                String lastMessage = chunks.get(chunks.size() - 1);
-                loadingProgressBar.setString(lastMessage);
-                updateStatusBar(lastMessage);
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    get(); // Check for exceptions
-                    
-                    SwingUtilities.invokeLater(() -> {
-                        loadingProgressBar.setVisible(false);
-                        updateStatusBar("Data loaded successfully");
-                        isLoadingData = false;
-                    });
-                    
-                    System.out.println("✅ All data loaded successfully");
-                    
-                } catch (Exception e) {
-                    System.err.println("❌ Error loading data: " + e.getMessage());
-                    e.printStackTrace();
-                    
-                    SwingUtilities.invokeLater(() -> {
-                        loadingProgressBar.setVisible(false);
-                        updateStatusBar("Error loading data");
-                        isLoadingData = false;
-                        
-                        JOptionPane.showMessageDialog(EnhancedEmployeeDashboard.this,
-                                "Error loading data: " + e.getMessage(),
-                                "Loading Error", JOptionPane.ERROR_MESSAGE);
-                    });
-                }
-            }
-        };
-
-        worker.execute();
+    private void loadInitialData() {
+        loadPersonalInfo();
+        loadAttendanceData();
+        loadPayrollData();
+        loadLeaveData();
     }
 
-    private void loadPersonalInformation() {
-        SwingUtilities.invokeLater(() -> {
-            nameLabel.setText(currentUser.getFullName());
-            positionLabel.setText(currentUser.getPosition());
-            statusLabel.setText(currentUser.getStatus());
-            salaryLabel.setText(String.format("₱%.2f", currentUser.getBasicSalary()));
-            phoneLabel.setText(currentUser.getPhoneNumber());
-            addressLabel.setText(currentUser.getAddress());
-            sssLabel.setText(currentUser.getSssNumber());
-            philhealthLabel.setText(currentUser.getPhilhealthNumber());
-        });
+    private void loadPersonalInfo() {
+        nameLabel.setText(currentUser.getFullName());
+        positionLabel.setText(currentUser.getPosition() != null ? currentUser.getPosition() : "N/A");
+        statusLabel.setText(currentUser.getStatus() != null ? currentUser.getStatus() : "N/A");
+        salaryLabel.setText(String.format("₱%,.2f", currentUser.getBasicSalary()));
+        phoneLabel.setText(currentUser.getPhoneNumber() != null ? currentUser.getPhoneNumber() : "N/A");
+        addressLabel.setText(currentUser.getAddress() != null ? currentUser.getAddress() : "N/A");
+        sssLabel.setText(currentUser.getSssNumber() != null ? currentUser.getSssNumber() : "N/A");
+        philhealthLabel.setText(currentUser.getPhilhealthNumber() != null ? currentUser.getPhilhealthNumber() : "N/A");
+        tinLabel.setText(currentUser.getTinNumber() != null ? currentUser.getTinNumber() : "N/A");
+        pagibigLabel.setText(currentUser.getPagibigNumber() != null ? currentUser.getPagibigNumber() : "N/A");
+        
+        if (currentUser.getBirthday() != null) {
+            birthdayLabel.setText(currentUser.getBirthday().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")));
+            ageLabel.setText(String.valueOf(currentUser.getAge()));
+        } else {
+            birthdayLabel.setText("N/A");
+            ageLabel.setText("N/A");
+        }
     }
 
     private void loadAttendanceData() {
+        attendanceTableModel.setRowCount(0);
+
         try {
             List<Attendance> attendanceList = attendanceDAO.getAttendanceByEmployeeId(currentUser.getEmployeeId());
-            
-            SwingUtilities.invokeLater(() -> {
-                // Clear existing data
-                attendanceTableModel.setRowCount(0);
-                
-                // Populate table
-                for (Attendance attendance : attendanceList) {
+
+            double totalHours = 0;
+            int totalDays = 0;
+            int lateCount = 0;
+
+            for (Attendance att : attendanceList) {
+                if (att.getLogIn() != null) {
+                    totalDays++;
+                    double workHours = att.getWorkHours();
+                    totalHours += workHours;
+
+                    if (att.isLate()) {
+                        lateCount++;
+                    }
+
+                    String status = determineAttendanceStatus(att);
+
                     Object[] row = {
-                        attendance.getDate(),
-                        attendance.getLogIn(),
-                        attendance.getLogOut(),
-                        attendance.getWorkHours(),
-                        attendance.getStatus(),
-                        attendance.getLateMinutes(),
-                        attendance.getUndertimeMinutes()
+                            att.getDate(),
+                            att.getLogIn() != null ? att.getLogIn().toString() : "N/A",
+                            att.getLogOut() != null ? att.getLogOut().toString() : "N/A",
+                            String.format("%.2f hrs", workHours),
+                            status,
+                            att.isLate() ? String.format("%.0f", att.getLateMinutes()) : "0",
+                            att.hasUndertime() ? String.format("%.0f", att.getUndertimeMinutes()) : "0"
                     };
                     attendanceTableModel.addRow(row);
                 }
-                
-                // Update summary
-                updateAttendanceSummary(attendanceList);
-            });
-            
+            }
+
+            // Update summary labels
+            totalDaysLabel.setText(String.valueOf(totalDays));
+            if (totalDays > 0) {
+                double avgHours = totalHours / totalDays;
+                averageHoursLabel.setText(String.format("%.2f", avgHours));
+            } else {
+                averageHoursLabel.setText("0.00");
+            }
+            lateCountLabel.setText(String.valueOf(lateCount));
+
         } catch (Exception e) {
-            System.err.println("❌ Error loading attendance data: " + e.getMessage());
-            throw new RuntimeException("Failed to load attendance data", e);
+            showErrorMessage("Error loading attendance data: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private String determineAttendanceStatus(Attendance att) {
+        if (att.getLogIn() == null) return "No Log In";
+        if (att.getLogOut() == null) return "No Log Out";
+
+        boolean isLate = att.isLate();
+        boolean hasUndertime = att.hasUndertime();
+
+        if (isLate && hasUndertime) {
+            return "Late & Undertime";
+        } else if (isLate) {
+            return "Late";
+        } else if (hasUndertime) {
+            return "Undertime";
+        } else if (att.isFullDay()) {
+            return "Full Day";
+        } else {
+            return "Present";
         }
     }
 
     private void loadPayrollData() {
+        payrollTableModel.setRowCount(0);
+
         try {
-            // Get current month/year for initial load
-            String currentMonth = monthComboBox.getSelectedItem().toString();
-            String currentYear = yearComboBox.getSelectedItem().toString();
-            
-            // Calculate payroll for current period
-            calculatePayrollForPeriod(currentMonth, currentYear);
-            
+            int selectedMonth = monthComboBox.getSelectedIndex() + 1;
+            int selectedYear = Integer.parseInt((String) yearComboBox.getSelectedItem());
+
+            LocalDate periodStart = LocalDate.of(selectedYear, selectedMonth, 1);
+            LocalDate periodEnd = periodStart.withDayOfMonth(periodStart.lengthOfMonth());
+
+            // Try to get existing payroll first
+            List<Payroll> existingPayrolls = payrollDAO.getPayrollByEmployeeIdAndDateRange(
+                    currentUser.getEmployeeId(), periodStart, periodEnd);
+
+            if (!existingPayrolls.isEmpty()) {
+                for (Payroll payroll : existingPayrolls) {
+                    addPayrollRow(payroll, "Calculated");
+                }
+            } else {
+                // Show placeholder row
+                Object[] row = {
+                        periodStart.format(DateTimeFormatter.ofPattern("MMM yyyy")),
+                        "Not calculated",
+                        "Click Calculate",
+                        "Click Calculate",
+                        "Click Calculate",
+                        "Click Calculate",
+                        "Pending"
+                };
+                payrollTableModel.addRow(row);
+            }
+
         } catch (Exception e) {
-            System.err.println("❌ Error loading payroll data: " + e.getMessage());
-            throw new RuntimeException("Failed to load payroll data", e);
+            showErrorMessage("Error loading payroll data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    private void updateAttendanceSummary(List<Attendance> attendanceList) {
-        if (attendanceList.isEmpty()) {
-            totalDaysLabel.setText("Total Days: 0");
-            averageHoursLabel.setText("Average Hours: 0.00");
-            attendanceRateLabel.setText("Attendance Rate: 0%");
+    private void addPayrollRow(Payroll payroll, String status) {
+        double totalAllowances = payroll.getRiceSubsidy() + payroll.getPhoneAllowance() + payroll.getClothingAllowance();
+
+        Object[] row = {
+                payroll.getStartDateAsLocalDate().format(DateTimeFormatter.ofPattern("MMM yyyy")),
+                payroll.getDaysWorked(),
+                String.format("₱%,.2f", payroll.getGrossEarnings()),
+                String.format("₱%,.2f", totalAllowances),
+                String.format("₱%,.2f", payroll.getTotalDeductions()),
+                String.format("₱%,.2f", payroll.getNetPay()),
+                status
+        };
+        payrollTableModel.addRow(row);
+    }
+
+    private void loadLeaveData() {
+        leaveTableModel.setRowCount(0);
+        // Note: Leave data loading would require LeaveRequestDAO
+        // For now, show placeholder
+        Object[] row = {"N/A", "No leave requests", "N/A", "N/A", "N/A", "N/A", "N/A"};
+        leaveTableModel.addRow(row);
+    }
+
+    private void calculateCurrentPayroll() {
+        try {
+            calculatePayrollButton.setEnabled(false);
+            calculatePayrollButton.setText("Calculating...");
+
+            int selectedMonth = monthComboBox.getSelectedIndex() + 1;
+            int selectedYear = Integer.parseInt((String) yearComboBox.getSelectedItem());
+
+            LocalDate periodStart = LocalDate.of(selectedYear, selectedMonth, 1);
+            LocalDate periodEnd = periodStart.withDayOfMonth(periodStart.lengthOfMonth());
+
+            Payroll payroll = payrollCalculator.calculatePayroll(currentUser.getEmployeeId(), periodStart, periodEnd);
+
+            // Refresh the table
+            loadPayrollData();
+
+            showSuccessMessage("Payroll calculated successfully for " + 
+                    periodStart.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+
+        } catch (Exception e) {
+            showErrorMessage("Error calculating payroll: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            calculatePayrollButton.setEnabled(true);
+            calculatePayrollButton.setText("💰 Calculate Payroll");
+        }
+    }
+
+    private void viewSelectedPayslip() {
+        int selectedRow = payrollTable.getSelectedRow();
+        if (selectedRow == -1) {
+            showWarningMessage("Please select a payroll record to view.");
             return;
         }
 
-        int totalDays = attendanceList.size();
-        double totalHours = attendanceList.stream()
-                .mapToDouble(Attendance::getWorkHours)
-                .sum();
-        double averageHours = totalHours / totalDays;
-        
-        // Calculate attendance rate (assuming 22 working days per month)
-        int expectedDays = 22;
-        double attendanceRate = (totalDays / (double) expectedDays) * 100;
-        attendanceRate = Math.min(attendanceRate, 100.0);
-
-        totalDaysLabel.setText("Total Days: " + totalDays);
-        averageHoursLabel.setText(String.format("Average Hours: %.2f", averageHours));
-        attendanceRateLabel.setText(String.format("Attendance Rate: %.1f%%", attendanceRate));
-    }
-
-    private void filterAttendanceRecords() {
-        String searchText = attendanceSearchField.getText().toLowerCase();
-        String filterType = attendanceFilterComboBox.getSelectedItem().toString();
-        
-        RowFilter<Object, Object> filter = new RowFilter<Object, Object>() {
-            @Override
-            public boolean include(Entry<? extends Object, ? extends Object> entry) {
-                boolean matchesSearch = true;
-                boolean matchesFilter = true;
-                
-                // Apply search filter
-                if (!searchText.isEmpty()) {
-                    matchesSearch = false;
-                    for (int i = 0; i < entry.getValueCount(); i++) {
-                        if (entry.getStringValue(i).toLowerCase().contains(searchText)) {
-                            matchesSearch = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // Apply type filter
-                if (!filterType.equals("All Records")) {
-                    String status = entry.getStringValue(4); // Status column
-                    switch (filterType) {
-                        case "Present Only":
-                            matchesFilter = status.equalsIgnoreCase("Present");
-                            break;
-                        case "Late Only":
-                            matchesFilter = status.equalsIgnoreCase("Late");
-                            break;
-                        case "Undertime Only":
-                            matchesFilter = status.contains("Undertime");
-                            break;
-                        case "Full Day Only":
-                            matchesFilter = status.equalsIgnoreCase("Present") && 
-                                           !status.contains("Late") && 
-                                           !status.contains("Undertime");
-                            break;
-                    }
-                }
-                
-                return matchesSearch && matchesFilter;
-            }
-        };
-        
-        attendanceTableSorter.setRowFilter(filter);
-        updateStatusBar("Filtered " + attendanceTable.getRowCount() + " records");
-    }
-
-    private void refreshAttendanceData() {
-        if (isLoadingData) return;
-        
-        updateStatusBar("Refreshing attendance data...");
-        
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                loadAttendanceData();
-                return null;
-            }
-            
-            @Override
-            protected void done() {
-                updateStatusBar("Attendance data refreshed");
-            }
-        };
-        
-        worker.execute();
-    }
-
-    private void refreshPayrollData() {
-        if (isLoadingData) return;
-        
-        updateStatusBar("Refreshing payroll data...");
-        
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                loadPayrollData();
-                return null;
-            }
-            
-            @Override
-            protected void done() {
-                updateStatusBar("Payroll data refreshed");
-            }
-        };
-        
-        worker.execute();
-    }
-
-    private void calculatePayrollForPeriod() {
-        String month = monthComboBox.getSelectedItem().toString();
-        String year = yearComboBox.getSelectedItem().toString();
-        calculatePayrollForPeriod(month, year);
-    }
-
-    private void calculatePayrollForPeriod(String month, String year) {
-        try {
-            updateStatusBar("Calculating payroll for " + month + " " + year + "...");
-            
-            // Get attendance for the period
-            List<Attendance> attendanceForPeriod = attendanceDAO.getAttendanceByEmployeeIdAndPeriod(
-                    currentUser.getEmployeeId(), month, year);
-            
-            // Calculate payroll
-            Payroll payroll = payrollCalculator.calculatePayroll(currentUser, attendanceForPeriod);
-            
-            // Update table
-            SwingUtilities.invokeLater(() -> {
-                // Clear existing data
-                payrollTableModel.setRowCount(0);
-                
-                // Add calculated payroll
-                Object[] row = {
-                    month + " " + year,
-                    payroll.getDaysWorked(),
-                    String.format("₱%.2f", payroll.getGrossPay()),
-                    String.format("₱%.2f", payroll.getTotalDeductions()),
-                    String.format("₱%.2f", payroll.getNetPay()),
-                    "View Details"
-                };
-                payrollTableModel.addRow(row);
-                
-                updateStatusBar("Payroll calculated successfully");
-            });
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error calculating payroll: " + e.getMessage());
-            SwingUtilities.invokeLater(() -> {
-                updateStatusBar("Error calculating payroll");
-                JOptionPane.showMessageDialog(this,
-                        "Error calculating payroll: " + e.getMessage(),
-                        "Calculation Error", JOptionPane.ERROR_MESSAGE);
-            });
-        }
-    }
-
-    private void showPayrollDetails(int selectedRow) {
         try {
             String period = (String) payrollTableModel.getValueAt(selectedRow, 0);
-            
-            // Create and show payroll details dialog
             PayrollDetailsDialog dialog = new PayrollDetailsDialog(this, currentUser, period);
             dialog.setVisible(true);
-            
+
         } catch (Exception e) {
-            System.err.println("❌ Error showing payroll details: " + e.getMessage());
-            JOptionPane.showMessageDialog(this,
-                    "Error displaying payroll details: " + e.getMessage(),
-                    "Display Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void exportPayrollToPDF() {
-        try {
-            updateStatusBar("Exporting payroll to PDF...");
-            
-            String period = monthComboBox.getSelectedItem() + " " + yearComboBox.getSelectedItem();
-            String fileName = "Payroll_" + currentUser.getEmployeeId() + "_" + period.replace(" ", "_") + ".pdf";
-            
-            // Use JasperReports service
-            jasperReportService.generatePayrollReport(currentUser, period, fileName);
-            
-            updateStatusBar("Payroll exported successfully");
-            
-            int result = JOptionPane.showConfirmDialog(this,
-                    "Payroll exported to " + fileName + "\nWould you like to open the file?",
-                    "Export Successful", JOptionPane.YES_NO_OPTION);
-            
-            if (result == JOptionPane.YES_OPTION) {
-                // Open the PDF file
-                Desktop.getDesktop().open(new java.io.File(fileName));
-            }
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error exporting payroll: " + e.getMessage());
-            updateStatusBar("Error exporting payroll");
-            JOptionPane.showMessageDialog(this,
-                    "Error exporting payroll: " + e.getMessage(),
-                    "Export Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void refreshCurrentTab() {
-        int selectedTab = tabbedPane.getSelectedIndex();
-        switch (selectedTab) {
-            case 0: // Personal Info
-                loadPersonalInformation();
-                break;
-            case 1: // Attendance
-                refreshAttendanceData();
-                break;
-            case 2: // Payroll
-                refreshPayrollData();
-                break;
-        }
-    }
-
-    private void exportCurrentTab() {
-        int selectedTab = tabbedPane.getSelectedIndex();
-        switch (selectedTab) {
-            case 1: // Attendance
-                exportAttendanceData();
-                break;
-            case 2: // Payroll
-                exportPayrollToPDF();
-                break;
-            default:
-                JOptionPane.showMessageDialog(this,
-                        "Export not available for this tab",
-                        "Export", JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-
-    private void exportAttendanceData() {
-        try {
-            updateStatusBar("Exporting attendance data...");
-            
-            String fileName = "Attendance_" + currentUser.getEmployeeId() + "_" + 
-                            LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".pdf";
-            
-            jasperReportService.generateAttendanceReport(currentUser, fileName);
-            
-            updateStatusBar("Attendance data exported successfully");
-            
-            int result = JOptionPane.showConfirmDialog(this,
-                    "Attendance data exported to " + fileName + "\nWould you like to open the file?",
-                    "Export Successful", JOptionPane.YES_NO_OPTION);
-            
-            if (result == JOptionPane.YES_OPTION) {
-                Desktop.getDesktop().open(new java.io.File(fileName));
-            }
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error exporting attendance: " + e.getMessage());
-            updateStatusBar("Error exporting attendance");
-            JOptionPane.showMessageDialog(this,
-                    "Error exporting attendance: " + e.getMessage(),
-                    "Export Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void showUserProfile() {
-        try {
-            // Create and show user profile dialog
-            JDialog profileDialog = new JDialog(this, "User Profile", true);
-            profileDialog.setSize(400, 300);
-            profileDialog.setLocationRelativeTo(this);
-            
-            JPanel panel = new JPanel(new BorderLayout());
-            panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-            
-            JLabel titleLabel = new JLabel("👤 User Profile", JLabel.CENTER);
-            titleLabel.setFont(new Font("Arial", Font.BOLD, 18));
-            panel.add(titleLabel, BorderLayout.NORTH);
-            
-            JTextArea profileText = new JTextArea();
-            profileText.setEditable(false);
-            profileText.setFont(new Font("Arial", Font.PLAIN, 12));
-            profileText.setText(
-                "Employee ID: " + currentUser.getEmployeeId() + "\n" +
-                "Name: " + currentUser.getFullName() + "\n" +
-                "Position: " + currentUser.getPosition() + "\n" +
-                "Status: " + currentUser.getStatus() + "\n" +
-                "Department: " + currentUser.getDepartment() + "\n" +
-                "Email: " + currentUser.getEmail() + "\n" +
-                "Phone: " + currentUser.getPhoneNumber() + "\n" +
-                "Hire Date: " + currentUser.getHireDate()
-            );
-            
-            panel.add(new JScrollPane(profileText), BorderLayout.CENTER);
-            
-            JButton closeButton = new JButton("Close");
-            closeButton.addActionListener(e -> profileDialog.dispose());
-            JPanel buttonPanel = new JPanel();
-            buttonPanel.add(closeButton);
-            panel.add(buttonPanel, BorderLayout.SOUTH);
-            
-            profileDialog.add(panel);
-            profileDialog.setVisible(true);
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error showing user profile: " + e.getMessage());
-            JOptionPane.showMessageDialog(this,
-                    "Error displaying user profile: " + e.getMessage(),
-                    "Profile Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void showSettings() {
-        try {
-            JDialog settingsDialog = new JDialog(this, "Settings", true);
-            settingsDialog.setSize(300, 200);
-            settingsDialog.setLocationRelativeTo(this);
-            
-            JPanel panel = new JPanel(new BorderLayout());
-            panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-            
-            JLabel titleLabel = new JLabel("⚙️ Application Settings", JLabel.CENTER);
-            titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-            panel.add(titleLabel, BorderLayout.NORTH);
-            
-            JPanel settingsPanel = new JPanel(new GridLayout(3, 1, 10, 10));
-            
-            JCheckBox autoRefreshCheckBox = new JCheckBox("Auto-refresh data every 5 minutes", true);
-            JCheckBox notificationsCheckBox = new JCheckBox("Show notifications", true);
-            JCheckBox soundCheckBox = new JCheckBox("Enable sound effects", false);
-            
-            settingsPanel.add(autoRefreshCheckBox);
-            settingsPanel.add(notificationsCheckBox);
-            settingsPanel.add(soundCheckBox);
-            
-            panel.add(settingsPanel, BorderLayout.CENTER);
-            
-            JPanel buttonPanel = new JPanel();
-            JButton saveButton = new JButton("Save");
-            JButton cancelButton = new JButton("Cancel");
-            
-            saveButton.addActionListener(e -> {
-                // Save settings logic would go here
-                JOptionPane.showMessageDialog(settingsDialog, "Settings saved successfully!");
-                settingsDialog.dispose();
-            });
-            
-            cancelButton.addActionListener(e -> settingsDialog.dispose());
-            
-            buttonPanel.add(saveButton);
-            buttonPanel.add(cancelButton);
-            panel.add(buttonPanel, BorderLayout.SOUTH);
-            
-            settingsDialog.add(panel);
-            settingsDialog.setVisible(true);
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error showing settings: " + e.getMessage());
-            JOptionPane.showMessageDialog(this,
-                    "Error displaying settings: " + e.getMessage(),
-                    "Settings Error", JOptionPane.ERROR_MESSAGE);
+            showErrorMessage("Error opening payslip: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -1295,218 +906,59 @@ public class EnhancedEmployeeDashboard extends JFrame {
         try {
             LeaveRequestDialog dialog = new LeaveRequestDialog(this, currentUser);
             dialog.setVisible(true);
+            loadLeaveData(); // Refresh after potential submission
         } catch (Exception e) {
-            System.err.println("❌ Error showing leave request dialog: " + e.getMessage());
-            JOptionPane.showMessageDialog(this,
-                    "Error displaying leave request form: " + e.getMessage(),
-                    "Leave Request Error", JOptionPane.ERROR_MESSAGE);
+            showErrorMessage("Error opening leave request dialog: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    private void showLatestPayslip() {
-        try {
-            String currentMonth = LocalDate.now().getMonth().name();
-            String currentYear = String.valueOf(LocalDate.now().getYear());
-            
-            PayrollDetailsDialog dialog = new PayrollDetailsDialog(this, currentUser, 
-                    currentMonth + " " + currentYear);
-            dialog.setVisible(true);
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error showing payslip: " + e.getMessage());
-            JOptionPane.showMessageDialog(this,
-                    "Error displaying payslip: " + e.getMessage(),
-                    "Payslip Error", JOptionPane.ERROR_MESSAGE);
-        }
+    private void showProfileDialog() {
+        JOptionPane.showMessageDialog(this,
+                "Profile management feature coming soon!",
+                "Feature Coming Soon",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void logout() {
-        int result = JOptionPane.showConfirmDialog(this,
+        int confirm = JOptionPane.showConfirmDialog(this,
                 "Are you sure you want to logout?",
                 "Confirm Logout", JOptionPane.YES_NO_OPTION);
-        
-        if (result == JOptionPane.YES_OPTION) {
-            try {
-                updateStatusBar("Logging out...");
-                
-                // Close this window
-                this.dispose();
-                
-                // Show login form
-                SwingUtilities.invokeLater(() -> {
-                    try {
-                        new LoginForm().setVisible(true);
-                    } catch (Exception e) {
-                        System.err.println("❌ Error showing login form: " + e.getMessage());
-                        System.exit(0);
-                    }
-                });
-                
-            } catch (Exception e) {
-                System.err.println("❌ Error during logout: " + e.getMessage());
-                System.exit(0);
-            }
-        }
-    }
 
-    private void setupEnhancedWindow() {
-        try {
-            // Set window icon
-            setIconImage(new ImageIcon(getClass().getResource("/icons/motorph-icon.png")).getImage());
-        } catch (Exception e) {
-            System.out.println("⚠️ Window icon not found, using default");
-        }
-        
-        // Set look and feel
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeel());
-            SwingUtilities.updateComponentTreeUI(this);
-        } catch (UnsupportedLookAndFeelException e) {
-            System.out.println("⚠️ Could not set system look and feel");
-        }
-        
-        // Enhanced window close operation
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                logout();
-            }
-        });
-    }
-
-    private void createErrorInterface(Exception error) {
-        // Remove all components
-        getContentPane().removeAll();
-        
-        JPanel errorPanel = new JPanel(new BorderLayout());
-        errorPanel.setBorder(BorderFactory.createEmptyBorder(50, 50, 50, 50));
-        
-        JLabel errorIcon = new JLabel("❌", JLabel.CENTER);
-        errorIcon.setFont(new Font("Arial", Font.BOLD, 48));
-        errorIcon.setForeground(Color.RED);
-        
-        JLabel errorTitle = new JLabel("System Error", JLabel.CENTER);
-        errorTitle.setFont(new Font("Arial", Font.BOLD, 24));
-        errorTitle.setForeground(Color.RED);
-        
-        JTextArea errorMessage = new JTextArea();
-        errorMessage.setText("An error occurred while initializing the application:\n\n" + 
-                            error.getMessage() + "\n\n" +
-                            "Please contact system administrator or try restarting the application.");
-        errorMessage.setEditable(false);
-        errorMessage.setFont(new Font("Arial", Font.PLAIN, 14));
-        errorMessage.setBackground(getBackground());
-        
-        JButton restartButton = new JButton("🔄 Restart Application");
-        restartButton.setFont(new Font("Arial", Font.BOLD, 14));
-        restartButton.addActionListener(e -> {
+        if (confirm == JOptionPane.YES_OPTION) {
             dispose();
-            System.exit(0);
-        });
-        
-        JButton exitButton = new JButton("❌ Exit");
-        exitButton.setFont(new Font("Arial", Font.BOLD, 14));
-        exitButton.addActionListener(e -> System.exit(1));
-        
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.add(restartButton);
-        buttonPanel.add(Box.createHorizontalStrut(20));
-        buttonPanel.add(exitButton);
-        
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.add(errorIcon, BorderLayout.NORTH);
-        topPanel.add(errorTitle, BorderLayout.SOUTH);
-        
-        errorPanel.add(topPanel, BorderLayout.NORTH);
-        errorPanel.add(new JScrollPane(errorMessage), BorderLayout.CENTER);
-        errorPanel.add(buttonPanel, BorderLayout.SOUTH);
-        
-        add(errorPanel);
-        revalidate();
-        repaint();
-    }
-
-    private void updateStatusBar(String message) {
-        SwingUtilities.invokeLater(() -> {
-            statusBarLabel.setText(message);
-            statusBarLabel.repaint();
-        });
-    }
-
-    /**
-     * Enhanced alternating row renderer for better table visualization
-     */
-    private class AlternatingRowRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                boolean isSelected, boolean hasFocus, int row, int column) {
-            
-            Component component = super.getTableCellRendererComponent(
-                    table, value, isSelected, hasFocus, row, column);
-            
-            if (!isSelected) {
-                if (row % 2 == 0) {
-                    component.setBackground(Color.WHITE);
-                } else {
-                    component.setBackground(new Color(248, 248, 255));
-                }
-            }
-            
-            // Special formatting for status column
-            if (column == 4 && value != null) { // Status column
-                String status = value.toString();
-                if (status.equalsIgnoreCase("Present")) {
-                    component.setForeground(new Color(0, 128, 0));
-                } else if (status.equalsIgnoreCase("Late")) {
-                    component.setForeground(new Color(255, 140, 0));
-                } else if (status.equalsIgnoreCase("Absent")) {
-                    component.setForeground(Color.RED);
-                } else {
-                    component.setForeground(Color.BLACK);
-                }
-            } else {
-                component.setForeground(Color.BLACK);
-            }
-            
-            return component;
+            SwingUtilities.invokeLater(() -> new LoginForm().setVisible(true));
         }
     }
 
-    /**
-     * Main method for testing the enhanced dashboard
-     */
+    // Utility methods for showing messages
+    private void showSuccessMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Success", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showErrorMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void showWarningMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Warning", JOptionPane.WARNING_MESSAGE);
+    }
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            try {
-                // Create sample employee for testing
-                Employee testEmployee = new Employee();
-                testEmployee.setEmployeeId("EMP001");
-                testEmployee.setFullName("John Michael Santos");
-                testEmployee.setPosition("Senior Software Developer");
-                testEmployee.setStatus("Regular");
-                testEmployee.setBasicSalary(75000.00);
-                testEmployee.setPhoneNumber("+63 912 345 6789");
-                testEmployee.setAddress("123 Makati Avenue, Makati City, Philippines");
-                testEmployee.setSssNumber("03-1234567-8");
-                testEmployee.setPhilhealthNumber("PH-123456789");
-                testEmployee.setRiceSubsidy(2000.00);
-                testEmployee.setPhoneAllowance(1500.00);
-                testEmployee.setClothingAllowance(1000.00);
-                testEmployee.setEmail("john.santos@company.com");
-                testEmployee.setDepartment("Information Technology");
-                testEmployee.setHireDate("2020-01-15");
-                
-                EnhancedEmployeeDashboard dashboard = new EnhancedEmployeeDashboard(testEmployee);
-                dashboard.setVisible(true);
-                
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(null,
-                        "Error starting application: " + e.getMessage(),
-                        "Startup Error", JOptionPane.ERROR_MESSAGE);
-                System.exit(1);
-            }
+            // Create test user
+            Employee testUser = new Employee();
+            testUser.setEmployeeId(10001);
+            testUser.setFirstName("John");
+            testUser.setLastName("Doe");
+            testUser.setPosition("Software Developer");
+            testUser.setStatus("Regular");
+            testUser.setBasicSalary(50000.0);
+            testUser.setRiceSubsidy(1500.0);
+            testUser.setPhoneAllowance(1000.0);
+            testUser.setClothingAllowance(800.0);
+
+            new EnhancedEmployeeDashboard(testUser).setVisible(true);
         });
     }
 }
